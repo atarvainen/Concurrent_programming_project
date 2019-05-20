@@ -56,4 +56,27 @@ In short, the server's chat room connections information data structure should h
 
 ### Chat rooms
 
-#### How to create a chat room?
+The focus of this work is in concurrent programming, not in creating the best possible chat server. Thus we won't spend much time in how to present messages from different chat rooms. We'll print messages from all the rooms the user is into the same screen.
+
+We won't implement, for example, private rooms nor create one to one chats (direct messages).
+
+#### Creating a chat room
+
+Command ```/create <room name>``` creates a new channel. 
+
+#### Destroying a chat room
+
+Command ```/destroy <room name>``` destroys a channel. Anyone can perform this since we won't implement administrator privileges (out of scope, focus in concurrency).
+
+#### Joining to a chat room
+
+Command ```/join <room name>``` allows a user to receive messages from a given chat room.
+
+#### Leaving a chat room
+
+Command ```/leave <room name>``` allows a user to cease receiving messages from a given chat room.
+
+## Implementation
+
+As this is a concurrent programming course, we want to minimize and simplify other programming aspects as much as possible. Therefore, we'll use our teacher's example chat program as a starting point and refactor and expand from there.
+
