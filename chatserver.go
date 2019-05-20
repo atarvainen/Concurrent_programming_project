@@ -23,6 +23,12 @@ func NewServer() *Server {
 	return srv
 }
 
+/*
+ * server maintains information about chat rooms
+ * new struct for each chat room, handles connection map
+ * struct provides a channel which is used to update client connection data
+ * thus reducing drastically how often the map is accessed
+*/
 type Server struct {
 	clientConns map[net.Conn]time.Time
 }

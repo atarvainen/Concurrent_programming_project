@@ -8,8 +8,8 @@ Challenge is how to make the most use of the aforementioned advantages. Thus, ou
 
 ### Handling connections
 
-Things to keep in mind. Minimize read/write of connections. 
-Different clients' Internet connection speeds vary a lot so very slow connections most not block the app.
+Things to keep in mind. Minimize read/write of connections.
+Different clients' Internet connection speeds vary a lot so very slow connections must not block the app.
 Have to protect from simultaneous read/write.
 
 #### Connections
@@ -26,11 +26,11 @@ Internet connection speeds vary and that cannot block the chat.
 
 #### Sending messages
 
-Sending most not block. Should not send to disconnected clients.
+Sending must not block. Should not send to disconnected clients.
 
 #### Receiving messages
 
-Receiving most not block.
+Receiving must not block.
 
 ## Design
 
@@ -62,7 +62,7 @@ We won't implement, for example, private rooms nor create one to one chats (dire
 
 #### Creating a chat room
 
-Command ```/create <room name>``` creates a new channel. 
+Command ```/create <room name>``` creates a new channel.
 
 #### Destroying a chat room
 
@@ -80,3 +80,6 @@ Command ```/leave <room name>``` allows a user to cease receiving messages from 
 
 As this is a concurrent programming course, we want to minimize and simplify other programming aspects as much as possible. Therefore, we'll use our teacher's example chat program as a starting point and refactor and expand from there.
 
+## Client, connecting to a server
+
+For example, just launch the server with ```go run chatserver.go```, open new terminals and use telnet to make client connections.
