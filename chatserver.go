@@ -3,7 +3,6 @@
  * Refactoring and expanding by Hannu Oksman, Antti Tarvainen
  */
 
-
 package main
 
 import (
@@ -16,24 +15,40 @@ import (
 	"time"
 )
 
+// server maintains rooms
+type Server struct {
+	rooms map[string]time.Time
+}
+
+// rooms maintains clients
+// they have unique names to allow changing rooms
+type Room struct {
+	name        string
+	clientConns map[net.Conn]time.Time
+}
+
 func NewServer() *Server {
 	srv := &Server{
-		clientConns: map[net.Conn]time.Time{},
+		rooms: map[string]time.Time{},
 	}
 	return srv
 }
 
-/*
- * server maintains information about chat rooms
- * new struct for each chat room, handles connection map
- * struct provides a channel which is used to update client connection data
- * thus reducing drastically how often the map is accessed
-*/
-type Server struct {
-	clientConns map[net.Conn]time.Time
+func NewRoom(n string) *Room {
+	room := &Room{
+		name:        n,
+		clientConns: map[net.Conn]time.Time{},
+	}
+	return room
 }
 
-func (srv *Server) ListenAndServe(address string) error {
+// adding clients to default room
+func (srv *Server) ListenAndServe(address string, room *Room) error {
+	// channels for room communications
+	connInfo := make(chan net.Conn)
+	msgChan := make(chan string)
+	go room.handleClientConn(connInfo, msgChan)
+	fmt.Println("Listening")
 	listener, err := net.Listen("tcp4", address)
 	if err != nil {
 		return err
@@ -43,17 +58,42 @@ func (srv *Server) ListenAndServe(address string) error {
 		if err != nil {
 			return err
 		}
-		srv.clientConns[conn] = time.Now()
-		go srv.handleClientConn(conn)
+		// new client connection, passing info to a room
+		connInfo <- conn
 	}
 }
 
-func (srv *Server) handleClientConn(conn net.Conn) {
+// room functionality
+func (room *Room) handleClientConn(connInfo chan net.Conn, msgChan chan string) {
+	fmt.Println("Handling conns")
+	delChan := make(chan net.Conn)
+	for {
+		select {
+		case newConnection := <-connInfo:
+			room.clientConns[newConnection] = time.Now()
+			go room.handleMessage(newConnection, delChan, msgChan)
+			fmt.Printf("%s connected\n", newConnection.LocalAddr)
+		case deleteConnenction := <-delChan:
+			delete(room.clientConns, deleteConnenction)
+			fmt.Printf("%s disconnected\n", deleteConnenction.LocalAddr)
+		case newMessage := <-msgChan:
+			for peer := range room.clientConns {
+				if _, err := fmt.Fprintf(peer, "%s\n", newMessage); err != nil {
+					log.Printf("error writing to client %v: %v", peer.RemoteAddr(), err)
+				}
+			}
+		}
+	}
+}
+
+// message handling
+func (room *Room) handleMessage(conn net.Conn, delChan chan net.Conn, msgChan chan string) {
 	reader := bufio.NewReader(conn)
 	for {
 		line, err := reader.ReadString('\n')
 		if err == io.EOF {
-			delete(srv.clientConns, conn)
+			// error, deleting connection from the room
+			delChan <- conn
 			return
 		}
 		if err != nil {
@@ -64,17 +104,18 @@ func (srv *Server) handleClientConn(conn net.Conn) {
 
 		log.Printf("%s: %v", conn.RemoteAddr(), line)
 
-		for peer := range srv.clientConns {
-			if _, err := fmt.Fprintf(peer, "%s\n", line); err != nil {
-				log.Printf("error writing to client %v: %v", conn.RemoteAddr(), err)
-			}
-		}
+		// sending message to the room for publishing
+		msgChan <- line
 	}
 }
 
+// creating server and main room, where clients are initially connected
 func main() {
 	server := NewServer()
-	if err := server.ListenAndServe(":9801"); err != nil {
+	fmt.Println("Server created")
+	mainRoom := NewRoom("main")
+	fmt.Println("Main room created")
+	if err := server.ListenAndServe(":9801", mainRoom); err != nil {
 		log.Fatal(err)
 	}
 }

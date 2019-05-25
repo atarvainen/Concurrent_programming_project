@@ -40,7 +40,7 @@ Receiving must not block.
 
 The server maintains connection information and starts a new goroutine for each connection (client). Multiple connection information data structures are required when multiple chat rooms are available. The server must be able to keep track of each room.
 
-A single channel is provided for the goroutines (clients). The channel is used for passing information about the connections. The channel handles locking the connection information, so it's safe from parallel access. The server pushes the connection information to the channel only when it's altered.
+A single channel is provided for the goroutines (clients). The channel is used for passing information about the connections. The channel handles locking the connection information, so it's safe from parallel access. The client pushes the connection information to the channel only when it's altered.
 
 When the client disconnects from a chat room it informs the server via the channel. If the client disconnects ungracefully an error should occur when trying to send a message to it. In this situation, the server should update the connection information.
 
