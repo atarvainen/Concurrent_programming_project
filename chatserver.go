@@ -25,6 +25,7 @@ type Server struct {
 type Room struct {
 	name        string
 	clientConns map[net.Conn]time.Time
+	queue				chan net.Conn
 }
 
 func NewServer() *Server {
@@ -38,6 +39,7 @@ func (srv *Server) NewRoom(n string) *Room {
 	room := &Room{
 		name:        n,
 		clientConns: map[net.Conn]time.Time{},
+		queue:			 make(chan net.Conn),
 	}
 	srv.rooms[n] = room
 	return room
@@ -45,14 +47,10 @@ func (srv *Server) NewRoom(n string) *Room {
 
 // adding clients to default room
 func (srv *Server) ListenAndServe(address string, room *Room) error {
-	// channels for room communications
-	connInfo := make(chan net.Conn)
-	msgChan := make(chan string)
-
 	fmt.Println("Listening")
 	listener, err := net.Listen("tcp4", address)
 
-	go room.handleClientConn(connInfo, msgChan, srv)
+	go room.handleClientConn(srv)
 	if err != nil {
 		return err
 	}
@@ -62,19 +60,20 @@ func (srv *Server) ListenAndServe(address string, room *Room) error {
 			return err
 		}
 		// new client connection, passing info to a room
-		connInfo <- conn
+		room.queue <- conn
 	}
 }
 
 // room functionality
-func (room *Room) handleClientConn(connInfo chan net.Conn, msgChan chan string, srv *Server) {
+func (room *Room) handleClientConn(srv *Server) {
 	fmt.Println("Handling conns")
 	delChan := make(chan net.Conn)
+	msgChan := make(chan string)
 	for {
 		select {
-		case newConnection := <-connInfo:
+		case newConnection := <- room.queue:
 			room.clientConns[newConnection] = time.Now()
-			go room.handleMessage(newConnection, delChan, msgChan, srv)
+			go room.handleMessage(newConnection, delChan, msgChan, room.queue, srv)
 			fmt.Printf("%s connected\n", newConnection.LocalAddr)
 
 			// welcome message for connecting users including room name
@@ -96,20 +95,18 @@ func (room *Room) handleClientConn(connInfo chan net.Conn, msgChan chan string, 
 }
 
 // remove client from old room and switch to new room
-func handleRoomSwitch(conn net.Conn, room *Room, newRoom *Room) {
+func handleRoomSwitch(conn net.Conn, room *Room, newRoom string, srv *Server) {
 	delete(room.clientConns, conn)
-	for peer := range room.clientConns {
-		fmt.Println("old room %v", peer.RemoteAddr())
-	}
-	newRoom.clientConns[conn] = time.Now()
-	for peer := range newRoom.clientConns {
-		fmt.Println("new room %v", peer.RemoteAddr())
-	}
-	fmt.Printf("%s switched to room %s\n", conn.LocalAddr, newRoom.name)
+
+	srv.rooms[newRoom].clientConns[conn] = time.Now()
+
+	srv.rooms[newRoom].queue <- conn
+
+	fmt.Printf("%s switched to room\n", conn.LocalAddr)
 }
 
 // message handling
-func (room *Room) handleMessage(conn net.Conn, delChan chan net.Conn, msgChan chan string, srv *Server) {
+func (room *Room) handleMessage(conn net.Conn, delChan chan net.Conn, msgChan chan string, connInfo chan net.Conn, srv *Server) {
 	reader := bufio.NewReader(conn)
 	for {
 		line, err := reader.ReadString('\n')
@@ -129,10 +126,14 @@ func (room *Room) handleMessage(conn net.Conn, delChan chan net.Conn, msgChan ch
 		if splitLine[0] == "/create" && len(splitLine) > 1 {
 			newRoom := srv.NewRoom(splitLine[1])
 			log.Printf("Created room %v", splitLine[1])
-			handleRoomSwitch(conn, room, newRoom)
+
+			go newRoom.handleClientConn(srv)
+
 		} else if splitLine[0] == "/join" && len(splitLine) > 1 {
 
-			//handleRoomSwitch(conn, room, newRoom)
+			handleRoomSwitch(conn, room, splitLine[1], srv)
+
+			return
 
 		} else if splitLine[0] == "/leave" && len(splitLine) > 1 {
 
