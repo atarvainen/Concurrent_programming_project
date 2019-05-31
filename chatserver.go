@@ -1,6 +1,6 @@
 /*
  * Original Program by Mikko Neijonen
- * Refactoring and expanding by Hannu Oksman, Antti Tarvainen
+ * Refactoring and expanding by Hannu Oksman & Antti Tarvainen
  */
 
 package main
@@ -22,10 +22,11 @@ type Server struct {
 
 // rooms maintains clients
 // they have unique names to allow changing rooms
+// channel is used to update map
 type Room struct {
 	name        string
 	clientConns map[net.Conn]time.Time
-	queue				chan net.Conn
+	queue       chan net.Conn
 }
 
 func NewServer() *Server {
@@ -39,7 +40,7 @@ func (srv *Server) NewRoom(n string) *Room {
 	room := &Room{
 		name:        n,
 		clientConns: map[net.Conn]time.Time{},
-		queue:			 make(chan net.Conn),
+		queue:       make(chan net.Conn),
 	}
 	srv.rooms[n] = room
 	return room
@@ -59,7 +60,7 @@ func (srv *Server) ListenAndServe(address string, room *Room) error {
 		if err != nil {
 			return err
 		}
-		// new client connection, passing info to a room
+		// new client connection, passing info to a room via channel
 		room.queue <- conn
 	}
 }
@@ -67,13 +68,16 @@ func (srv *Server) ListenAndServe(address string, room *Room) error {
 // room functionality
 func (room *Room) handleClientConn(srv *Server) {
 	fmt.Println("Handling conns")
+	// channels to pass messages and connection info between room and clients
 	delChan := make(chan net.Conn)
 	msgChan := make(chan string)
 	for {
 		select {
-		case newConnection := <- room.queue:
+		case newConnection := <-room.queue:
 			room.clientConns[newConnection] = time.Now()
-			go room.handleMessage(newConnection, delChan, msgChan, room.queue, srv)
+			// new goroutine for a new client
+			// channels are provided to communicate with the room
+			go room.handleMessage(newConnection, delChan, msgChan, srv)
 			fmt.Printf("%s connected\n", newConnection.LocalAddr)
 
 			// welcome message for connecting users including room name
@@ -81,11 +85,17 @@ func (room *Room) handleClientConn(srv *Server) {
 				log.Printf("error writing to client %v: %v", newConnection.RemoteAddr(), err)
 			}
 		case deleteConnenction := <-delChan:
+			// client informs room when disconnecting, room updates connection map
 			delete(room.clientConns, deleteConnenction)
 			fmt.Printf("%s disconnected\n", deleteConnenction.LocalAddr)
 		case newMessage := <-msgChan:
+			// room receives a new message and publishes it
 			for peer := range room.clientConns {
-				fmt.Println("Printing to room %v", room.name)
+				fmt.Println("Printing to room", room.name)
+				// TODO: implement a separate channel between room and each client
+				// then room can push message to each client-channel
+				// and the clients can handle printing from the channel
+				// current implementation has to wait, for example, time out error for a long tim
 				if _, err := fmt.Fprintf(peer, "%s\n", newMessage); err != nil {
 					log.Printf("error writing to client %v: %v", peer.RemoteAddr(), err)
 				}
@@ -106,7 +116,7 @@ func handleRoomSwitch(conn net.Conn, room *Room, newRoom string, srv *Server) {
 }
 
 // message handling
-func (room *Room) handleMessage(conn net.Conn, delChan chan net.Conn, msgChan chan string, connInfo chan net.Conn, srv *Server) {
+func (room *Room) handleMessage(conn net.Conn, delChan chan net.Conn, msgChan chan string, srv *Server) {
 	reader := bufio.NewReader(conn)
 	for {
 		line, err := reader.ReadString('\n')
@@ -128,7 +138,7 @@ func (room *Room) handleMessage(conn net.Conn, delChan chan net.Conn, msgChan ch
 			log.Printf("Created room %v", splitLine[1])
 
 			go newRoom.handleClientConn(srv)
-
+			// join to a room
 		} else if splitLine[0] == "/join" && len(splitLine) > 1 {
 
 			handleRoomSwitch(conn, room, splitLine[1], srv)
@@ -136,13 +146,9 @@ func (room *Room) handleMessage(conn net.Conn, delChan chan net.Conn, msgChan ch
 			return
 
 		} else if splitLine[0] == "/leave" && len(splitLine) > 1 {
-
-
-
+			// not implemented
 		} else if splitLine[0] == "/destroy" && len(splitLine) > 1 {
-
-
-
+			// not implemented
 		} else {
 			log.Printf("%s: %v", conn.RemoteAddr(), line)
 

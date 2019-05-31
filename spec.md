@@ -4,6 +4,8 @@ We'll program this with Go. It's designed for concurrent programming, we've used
 The focus of this app is to utilize concurrency's most significant advantages which are the ability to handle multiple tasks concurrently and doing that with a minimal amount of waiting.
 Challenge is how to make the most use of the aforementioned advantages. Thus, our design goals are preventing deadlocks/livelocks and minimizing congestion to critical sections.
 
+Works best on Linux.
+
 ## Identifying critical sections
 
 ### Handling connections
@@ -38,11 +40,11 @@ Receiving must not block.
 
 #### Handling connections
 
-The server maintains connection information and starts a new goroutine for each connection (client). Multiple connection information data structures are required when multiple chat rooms are available. The server must be able to keep track of each room.
+The server maintains rooms and rooms maintains connection information about clients. The rooms starts a new goroutine for each connection (client). Multiple connection information data structures are required when multiple chat rooms are available (each room has it's own connections). This way connection info is in smaller and more accessible data structure. The server keeps track of each room.
 
-A single channel is provided for the goroutines (clients). The channel is used for passing information about the connections. The channel handles locking the connection information, so it's safe from parallel access. The client pushes the connection information to the channel only when it's altered.
+A channel is provided for the goroutines (clients) to handle connection information. The channel is used for passing information about the connections. The channel handles locking the connection information, so it's safe from parallel access. The client pushes the connection information to the channel only when it's altered.
 
-When the client disconnects from a chat room it informs the server via the channel. If the client disconnects ungracefully an error should occur when trying to send a message to it. In this situation, the server should update the connection information.
+When the client disconnects from a chat room it informs the server via the channel. If the client disconnects ungracefully an error should occur when trying to send a message to it. In this situation, the room updates the connection information.
 
 #### Handling messages
 
@@ -52,7 +54,7 @@ Faster, provided that the server has enough resources, is that each client has o
 
 Buffered channels should be used to limit the memory burden on the server. Also when a channel blocks because of it's full, it can be a signal of a very bad connection which should be dropped. The exact size of the buffer is to be determined.
 
-In short, the server's chat room connections information data structure should have a channel and addition to address and port.
+In our current implementation the room receives messages from a message channel and then prints the message to the clients.
 
 ### Chat rooms
 
@@ -66,7 +68,7 @@ Command ```/create <room name>``` creates a new channel.
 
 #### Destroying a chat room
 
-Command ```/destroy <room name>``` destroys a channel. Anyone can perform this since we won't implement administrator privileges (out of scope, focus in concurrency).
+Not implemented.
 
 #### Joining to a chat room
 
@@ -74,7 +76,7 @@ Command ```/join <room name>``` allows a user to receive messages from a given c
 
 #### Leaving a chat room
 
-Command ```/leave <room name>``` allows a user to cease receiving messages from a given chat room.
+When a user joins to a new room, she disconnects from her current room. No separate leave-functionality is implemented.
 
 ## Implementation
 
@@ -83,3 +85,7 @@ As this is a concurrent programming course, we want to minimize and simplify oth
 ## Client, connecting to a server
 
 For example, just launch the server with ```go run chatserver.go```, open new terminals and use telnet to make client connections.
+
+## Results
+
+We are satisfied with the result, given our time constraints. We tested the implementation with GNU Terminator, which allowed us to launch multiple connections feasibly. What we would have liked to implement better was passing messages from a room to clients. Overall, this course was useful as was learning Go in the process.
